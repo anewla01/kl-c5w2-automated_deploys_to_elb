@@ -23,7 +23,7 @@ pipeline {
           steps {
             sh '''#!/bin/bash
             source venv/bin/activate
-            eb create w2-automated_deploys_to_elb_main_env --single
+            eb create w2-automateddeploystoelbmainenv-env --single
             '''
           }
         }
