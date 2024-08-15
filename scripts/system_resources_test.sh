@@ -1,7 +1,7 @@
 #!/bin/bash
 # Purpose: Script for performing healthchecks on ec2 machine
 
-# Maximum thresholds (inclusive) that should be 
+# Maximum thresholds (exclusive) that should be 
 CPU_UTILIZATION_THRESHOLD=60
 
 function install_dependencies(){
@@ -12,13 +12,21 @@ function install_dependencies(){
     sudo apt-get install -y sysstat
   fi
 }
-function get_free_cpu_utiliztion_pct(){
-  local return_value=$(mpstat -P ALL | grep "all" | awk '{print $NF}')
-  echo "Free CPU pct: $return_value"
+function get_cpu_utiliztion_pct(){
+  local return_value=$(mpstat -P ALL | grep "all" | awk '{print 100 - $NF}')
+  echo "${return_value}" 
 }
 
 function main(){
   install_dependencies
+
+  local cpu_util=$(get_cpu_utiliztion_pct)
+  echo "Found CPU usage: ${cpu_util}% (THREHOLD: ${CPU_UTILIZATION_THRESHOLD}%)"
+
+  if [[ $(echo "${cpu_util}" > "${CPU_UTILIZATION_THRESHOLD}" | bc) -ne 0 ]]
+  then
+    exit 1
+  fi
 }
 
-# main
+main
