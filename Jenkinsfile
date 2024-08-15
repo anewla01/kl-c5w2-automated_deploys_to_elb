@@ -14,10 +14,18 @@ pipeline {
         stage ('Test') {
             steps {
                 sh '''#!/bin/bash
-                chmod +x system_resources_test.sh
-                ./system_resources_test.sh
+                chmod +x scripts/system_resources_test.sh
+                ./scripts/system_resources_test.sh
                 '''
             }
+        }
+        stage ('Deploy') {
+          steps {
+            sh '''#!/bin/bash
+            source venv/bin/activate
+            eb create w2-automated_deploys_to_elb_main_env --single
+            '''
+          }
         }
     }
 }
