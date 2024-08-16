@@ -1,166 +1,127 @@
-# Kura Labs Cohort 5- Deployment Workload 2
-## CICD with AWS CLI:
+# Overview
 
-Welcome to Deployment Workload 2!  In the first deployment workload, we manually uploaded the source code to AWS EB.  Let’s start automating more of that pipeline.  
+Business use case: A Retail Bank wants to deploy an application to the cloud
+that is fully managed by AWS.
 
-Be sure to document each step in the process and explain WHY each step is important to the pipeline.
+This document serves as notes, and reflections on deploying the infrastructure
+needed to meet the business needs described above.
 
-## Instructions
+Complete Tech Stack:
 
-1. Clone this repo to your GitHub account
+Cloud: AWS
 
-2. Create AWS Access Keys:
+- Jenkins: for pipeline build, and deployment to Elastic Beanstalk (EB)
+- Elastic Beanstalk (EB): auto scaling and code deployment to machines
+- Application: REST Flask app (Python)
+- venv: python environment manager, used to ensure that the code that is
+  being executed will leverage the correct dependencies.
 
-   a. Navigate to the AWS servce: IAM (search for this in the AWS console)
+## Purpose
 
-   b. Click on "Users" on the left side navigation panel
+In this workstream we manually deployed Jenkins on a manually provisioned EC2
+instance, and improved upon the previous
+[workstream](https://github.com/anewla01/kl-c5w1-elastic_beanstalk/blob/main/README.md)
+by enabling Jenkins to deploy successful builds to Elastic Bean Stalk.
 
-   c. Click on your User Name
+# Infrastructure Walkthrough
 
-   d. Underneath the "Summary" section, click on the "Security credentials" tab
+## 1. Standing up Jenkins Server
 
-   e. Scroll down to "Access keys" and click on "Create access key"
+A Jenkins server was launched on an EC2 t2.micro following the same procedure
+from the previous workload. The github repository was attached via a github
+personal access token.
 
-   f. Select the appropriate "use case", and then click "Next" and then "Create access key"
+The Jenkins user is then password protected as it will have access to critical
+AWS credentials. AWS offers a credentialing procedure similar to that of a user
+name and password. The AWS Access Key is a public identifier that corresponds to
+an IAM user or role, and the AWS Secret Access Key is effectively the password.
+These credentials need to be securely managed, as the key pair will give the
+holder the same access as the underlying user or role.
 
- ACCESS KEYS CAN ONLY BE VIEWED ONCE! 
- 
- Be sure to save them somewhere (you will need these later) and NEVER upload the keys to any public repository.  
+The AWS CLI is then installed, and is appropriately configured for the Jenkins
+user, leveraging the AWS credentials that have provisioned for this deployment.
 
-NOTE: What are access keys and why would sharing them be dangerous? 
+## 2. Configuring Jenkins + Initializing Elastic Beanstalk Applicaition
 
+This Jenkins pipeline consists of three stages: `Build`, `Test`, and `Deploy`.
+During the `Build` step, a python virtual environment is created, and all
+underlying requirements are installed. This provides two pieces of meaningful
+functionality:
 
-3. Create a t2.micro EC2 for your Jenkins Server (IMPORTANT: include ALL commands from Workload 1 step 3b to do so)
+1. It acts as a sanity check that the `requirements.txt` has been properly
+   configured (e.g: there aren't any dependency conflicts that would break
+   farther downstream during the deploy)
+2. It creates an isolated area where the dependencies for the application will
+   be kept. Python dependencies stored in the venv are kept separately from the
+   other environments and the remainder of the python dependencies available to the
+   broader system.
 
-4. Create a BASH script called "system_resources_test.sh" that checks for system resources (can be memory, cpu, disk, all of the above and/or more) and push it to the GH repo. IMPORTANT: make sure you use conditional statements and exit codes (0 or 1) if any resource exceeds a certain threshold.
+Ultimately, the python virtual environment ensures general consistency when
+developing, and launching an application.
 
-SEE: https://www.geeksforgeeks.org/how-to-use-exit-code-to-read-from-terminal-from-script-and-with-logical-operators/ for more information
+In the `Test` phase a script: `system_resources_test.sh` is used to measure the
+health of the Jenkins server before attempting to deploy. This is helpful in
+scenarios where we suspect that our server may be under significant duress and
+incapable of continuing with the other portions of the CICD pipeline. In this
+scenario, we leverage exit codes in order to properly indicate that the script
+has not met it's successful state. Jenkins picks up on failures of this script
+and will hault the pipeline. Additional configuration could be done to trigger
+an alert to operational owners.
 
-Note: Why are exit codes important? Especially if running the script through a CICD Pipeline?
-
-5. Create a MultiBranch Pipeline and connect your GH repo to it (build should start automatically)
-
-6. Back in the Jenkins Server Terminal- Install AWS CLI on the Jenkins Server with the following commands:
-
-```
-$curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-$unzip awscliv2.zip
-$sudo ./aws/install
-$aws --version 
-```
-
-If AWS CLI was installed properly the version number will output to the terminal.
-
-7. Switch to the user "jenkins"
-
-    a. create a password for the user "jenkins" by running: 
-  
-  ```
-  $sudo passwd jenkins
-  ```
-
-  b. switch to the jenkins user by running:
-
-  ```
-  sudo su - jenkins
-  ```
-
-8. Navigate to the pipeline directory within the jenkins "workspace"
-
-```
-cd workspace/[name-of-multibranch-pipeline]
-```
-
-you should be able to see the application source code from this directory
-
-9. Activate the Python Virtual Environment
-
-```
-source venv/bin/activate
-```
-NOTE: Python Virtual Environments are usually created by running the command `python3 -m venv [name-of-environment]`.  What is a virtual environment? Why is it important/necessary? and when was this one (venv) created? HINT: See step 13 below.
-
-
-10. Install AWS EB CLI on the Jenkins Server with the following commands:
-
-```
-$pip install awsebcli
-$eb --version
-```
-If AWS EB CLI was installed properly the version number will output to the terminal
-
-11. Configure AWS CLI with the folling command:
-
-```
-$aws configure
-```
-   a. Enter your access key
-
-   b. Enter your secret access key
-
-   c. region: "us-east-1"
-
-   d. output format" "json"
-
-   e. check to see if AWS CLI has been configured by entering:
-
-``` 
-$aws ec2 describe-instances 
-```
+`Deploy` is the final stage of the Jenkins pipeline. It has been configured to
+verify that the EB environment is already available, otherwise it will seek to
+create a new one, given the hardcoded environment name. A manual step to
+initialize EB was taken before the `Deploy` stage could successfully run. EB
+command line tools were installed within the necessary python virtual
+environment, and then commands were executed to create an EB application from
+the CLI.
+[![Jenkins Failure](./docs/resources/jenkins_failure.png)](./docs/resources/jenkins_failure.png)
+_NOTE: after this failure, the Jenkins file was updated to handle deploys to environments that 
+already exist_
 
 
-12. Initialize AWS Elastic Beanstalk CLI
+[![Jenkins Success](./docs/resources/jenkins_success.png)](./docs/resources/jenkins_success.png)
 
-    a. run the following command:
-  ```
-  eb init
-  ```
-  
-   b. Set the default region to: us-east-1
 
-   c. Enter an application name (or leave it as default)
+# Systems Diagram
 
-   d. Select python3.7
+[![systems diagram](./docs/resources/c5w2_elastic_beanstalk_retail_banking_app.drawio.png)](./docs/resources/c5w2_elastic_beanstalk_retail_banking_app.drawio.png)
 
-   e. Select "no" for code commit
+# Conclusion
 
-   f. Select "yes" for SSH and select a "KeyPair"
+Automated Deploys within a CICD pipeline can remove manual overhead from SDLC and allow for 
+smoother releases of changes to production. Having this system entirely automated means that 
+important features can be provided to downstream users with minimal delay. This speed, however,
+comes with additional risks. The key concern is that the automated CICD will deploy changes to 
+production that are not in fact ready to be deployed or have catastrophic issues within it. This
+could stem from several areas:
+1. CICD does not have reasonable testing infrastructure to verify that the system in and of itself
+is working correctly. Often times there is an extreme amount of focus on testing for the 
+application code, but the code that powers the CICD similarly needs robust testing. 
+2. Application code does not have enough meaningful tests, such tha the CICD `Test` phase of the 
+pipeline cannot appropriately capture for issues.
 
-13. Add a "deploy" stage to the Jenkinsfile 
+Both of these issues are resolved by having increasing the requirements around code quality. In 
+addition, production deployments should be done in a blue/green deploy or canary deploy manner, this 
+way the business can reduce the risk of releasing breaking code.
 
-    a. use your text editor of choice to edit the "jenkinsfile"
+## Discrete Optimizations
 
-    b. add the following code block (modify the code with your environment name and remove the square brackets) AFTER the "Test" Stage:
+In this workstream we made efforts to further automate the procedures used in
+the previous deployment. There are a few places that still have manual effort
+and could be further improved upon.
 
-  ```
-  stage ('Deploy') {
-            steps {
-                sh '''#!/bin/bash
-                source venv/bin/activate
-                eb create [enter-name-of-environment-here] --single
-                '''
-            }
-        }
-  ```
-IMPORTANT: THE SYNTAX OF THE JENKINSFILE IS VERY SPECIFIC! MAKE SURE THAT THE STAGES AND CURLY BRACKETS ARE IN THE CORRECT ORDER OTHERWISE THE PIPELINE WILL NOT BUILD!
-See https://www.jenkins.io/doc/book/pipeline/syntax/ for more information.
+The introduction of Terraform would be incredibly beneficial to this process.
+This would allow for spinning up of the EC2 instances that are running Jenkins
+and any other additional provisioning necessary. Instance profiles, or IAM roles
+should be investigated to allow for pass through of meaningful credentials
+directly to the EC2 instance, without having to manage AWS access keys.
 
-  c. Push these changes to the GH Repository
-
-14. Navigate back to the Jenkins Console and build the pipeline again.
-
-If the pipeline sucessfully completes, navigate to AWS Elastic Beanstalk in the AWS Console and check for the environment that is created. The application should be running at the domain created by Elastic Beanstalk.
-
-15. Document! All projects have documentation so that others can read and understand what was done and how it was done. Create a README.md file in your repository that describes:
-
-	  a. The "PURPOSE" of the Workload,
-
-  	b. The "STEPS" taken (and why each was necessary/important,
-
-  	c. A "SYSTEM DESIGN DIAGRAM" that is created in draw.io,
-
-	  d. "ISSUES/TROUBLESHOOTING" that may or may have occured,
-
-  	e. An "OPTIMIZATION" section for that answers the question: How is using a deploy stage in the CICD pipeline able to increase efficiency of the buisiness?  What issues, if any, can you think of that might come with automating source code to a production environment? How would you address/resolve this?
-
-    f. A "CONCLUSION" statement as well as any other sections you feel like you want to include.
+The EB application was initialized manually from the CLI, which is a big
+improvement from using the UI, however, this step should be made easily
+reproducible in the form of a script (likely using Terraform). Additionally,
+changes should be made to the repository to include the necessary packages that
+are used for the deploy process (e.g: `awsebcli`). This could be either done by
+creating a separate requirements file or by updating the Jenkins file to include
+a pip install step. Lastly Jenkins builds were manually kicked off, however, Github could be connected
+(likely via Github Actions) to trigger Jenkins builds on commit to the `main` branch
